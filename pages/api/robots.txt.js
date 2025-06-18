@@ -2,11 +2,8 @@ export default async function handler(req, res) {
   try {
     const wordpressUrl = process.env.NEXT_PUBLIC_WORDPRESS_URL;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-<<<<<<< Updated upstream
-=======
     
     // Environment variable to force indexing regardless of WordPress settings
->>>>>>> Stashed changes
     const forceAllowIndexing = process.env.FORCE_ALLOW_INDEXING === 'true';
     
     if (!wordpressUrl) {
