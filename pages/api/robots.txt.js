@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   try {
-    const wordpressUrl = process.env.WORDPRESS_URL || process.env.NEXT_PUBLIC_WORDPRESS_URL;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://yourdomain.com';
+    const wordpressUrl = process.env.NEXT_PUBLIC_WORDPRESS_URL;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
     
     // Add this environment variable to force indexing regardless of WordPress settings
     const forceAllowIndexing = process.env.FORCE_ALLOW_INDEXING === 'true';
@@ -145,7 +145,7 @@ Sitemap: ${siteUrl}/sitemap.xml`;
     const emergencyRobots = `User-agent: *
 Disallow: /
 
-Sitemap: ${process.env.NEXT_PUBLIC_SITE_URL || 'https://yourdomain.com'}/sitemap.xml`;
+Sitemap: ${process.env.NEXT_PUBLIC_SITE_URL}/sitemap.xml`;
 
     res.setHeader('Content-Type', 'text/plain');
     res.status(200).send(emergencyRobots);
