@@ -2,31 +2,30 @@ export default async function handler(req, res) {
   try {
     const wordpressUrl = process.env.NEXT_PUBLIC_WORDPRESS_URL;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+<<<<<<< Updated upstream
+=======
+    
+    // Environment variable to force indexing regardless of WordPress settings
+>>>>>>> Stashed changes
     const forceAllowIndexing = process.env.FORCE_ALLOW_INDEXING === 'true';
-    
-    // Add cache-busting headers
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.setHeader('Last-Modified', new Date().toUTCString());
-    
-    // Add a timestamp comment for debugging
-    const timestamp = new Date().toISOString();
     
     if (!wordpressUrl) {
       throw new Error('WordPress URL not configured');
     }
 
-    // Method 1: Check WordPress blog_public setting first
+    // Method 1: Check WordPress blog_public setting first with cache-busting
     let isPublic = true;
     try {
+      // Add cache-busting parameters and headers
+      const cacheBuster = `?t=${Date.now()}&r=${Math.random()}`;
       const settingsResponse = await fetch(
-        `${wordpressUrl}/wp-json/wp/v2/settings`,
+        `${wordpressUrl}/wp-json/wp/v2/settings${cacheBuster}`,
         {
           headers: {
             'User-Agent': 'NextJS-Headless-Site',
-            'Cache-Control': 'no-cache',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
           },
         }
       );
@@ -34,17 +33,25 @@ export default async function handler(req, res) {
       if (settingsResponse.ok) {
         const settings = await settingsResponse.json();
         isPublic = settings.blog_public !== 0;
+        
+        // Log for debugging (remove in production)
+        console.log(`[${new Date().toISOString()}] WordPress blog_public setting:`, settings.blog_public);
+        console.log(`[${new Date().toISOString()}] Site is public:`, isPublic);
       }
     } catch (settingsError) {
-      // Ignore settings errors
+      console.error('Settings fetch error:', settingsError);
+      // Ignore settings errors but log them
     }
 
-    // Method 2: Try to get robots.txt directly from WordPress
+    // Method 2: Try to get robots.txt directly from WordPress with cache-busting
     try {
-      const robotsResponse = await fetch(`${wordpressUrl}/robots.txt?t=${Date.now()}`, {
+      const cacheBuster = `?t=${Date.now()}&r=${Math.random()}`;
+      const robotsResponse = await fetch(`${wordpressUrl}/robots.txt${cacheBuster}`, {
         headers: {
           'User-Agent': 'NextJS-Headless-Site',
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
         },
       });
       
@@ -54,7 +61,7 @@ export default async function handler(req, res) {
         const hasDisallowAll = robotsContent.includes('Disallow: /') && 
                                !robotsContent.includes('Disallow: /wp-');
         
-        // Check RankMath API for noindex
+        // Check RankMath API for noindex with cache-busting
         let hasNoIndex = false;
         try {
           const headlessResponse = await fetch(
@@ -62,7 +69,9 @@ export default async function handler(req, res) {
             {
               headers: {
                 'User-Agent': 'NextJS-Headless-Site',
-                'Cache-Control': 'no-cache',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
               },
             }
           );
@@ -74,20 +83,32 @@ export default async function handler(req, res) {
             hasNoIndex = robotsDirective.includes('noindex');
           }
         } catch (apiError) {
+          console.error('RankMath API error:', apiError);
           // Ignore API errors
         }
         
         // Decide whether to discourage indexing
         const shouldDiscourageIndexing = !forceAllowIndexing && (!isPublic || hasDisallowAll || hasNoIndex);
         
+        console.log(`[${new Date().toISOString()}] Should discourage indexing:`, shouldDiscourageIndexing);
+        console.log(`[${new Date().toISOString()}] Reason - isPublic:`, isPublic, 'hasDisallowAll:', hasDisallowAll, 'hasNoIndex:', hasNoIndex);
+        
         if (shouldDiscourageIndexing) {
-          const discouragingRobots = `# Generated: ${timestamp}
-# Status: DISCOURAGING INDEXING
-User-agent: *
+          const discouragingRobots = `User-agent: *
 Disallow: /
 
 Sitemap: ${siteUrl}/sitemap.xml`;
           
+          // Set aggressive no-cache headers
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0, private');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+          res.setHeader('Last-Modified', new Date().toUTCString());
+          res.setHeader('ETag', `"blocked-${Date.now()}"`);
+          res.setHeader('Vary', 'User-Agent, Accept-Encoding');
+          
+          console.log(`[${new Date().toISOString()}] Serving BLOCKED robots.txt`);
           return res.status(200).send(discouragingRobots);
         }
         
@@ -102,14 +123,18 @@ Sitemap: ${siteUrl}/sitemap.xml`;
           siteUrl
         );
         
-        // Add timestamp to the robots.txt
-        const timestampedRobots = `# Generated: ${timestamp}
-# Status: ALLOWING INDEXING (from WordPress)
-${robotsContent}`;
+        // Set moderate caching for allowed content, but still allow quick updates
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=60'); // 5 min browser, 1 min CDN
+        res.setHeader('Last-Modified', new Date().toUTCString());
+        res.setHeader('ETag', `"allowed-${Date.now()}"`);
+        res.setHeader('Vary', 'User-Agent, Accept-Encoding');
         
-        return res.status(200).send(timestampedRobots);
+        console.log(`[${new Date().toISOString()}] Serving ALLOWED robots.txt from WordPress`);
+        return res.status(200).send(robotsContent);
       }
     } catch (fetchError) {
+      console.error('WordPress robots.txt fetch error:', fetchError);
       // Continue to fallback
     }
 
@@ -117,19 +142,24 @@ ${robotsContent}`;
     const shouldDiscourageFallback = !forceAllowIndexing && !isPublic;
     
     if (shouldDiscourageFallback) {
-      const discouragingRobots = `# Generated: ${timestamp}
-# Status: DISCOURAGING INDEXING (fallback)
-User-agent: *
+      const discouragingRobots = `User-agent: *
 Disallow: /
 
 Sitemap: ${siteUrl}/sitemap.xml`;
       
+      // Aggressive no-cache for blocked content
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0, private');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Last-Modified', new Date().toUTCString());
+      res.setHeader('ETag', `"fallback-blocked-${Date.now()}"`);
+      
+      console.log(`[${new Date().toISOString()}] Serving FALLBACK BLOCKED robots.txt`);
       return res.status(200).send(discouragingRobots);
     }
 
-    const fallbackRobots = `# Generated: ${timestamp}
-# Status: ALLOWING INDEXING (fallback)
-User-agent: *
+    const fallbackRobots = `User-agent: *
 Allow: /
 
 # Block WordPress backend paths  
@@ -151,21 +181,31 @@ Disallow: /?replytocom=
 # Sitemap
 Sitemap: ${siteUrl}/sitemap.xml`;
 
-    return res.status(200).send(fallbackRobots);
+    // Moderate caching for fallback allowed content
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=60'); // 5 min browser, 1 min CDN
+    res.setHeader('Last-Modified', new Date().toUTCString());
+    res.setHeader('ETag', `"fallback-allowed-${Date.now()}"`);
+    
+    console.log(`[${new Date().toISOString()}] Serving FALLBACK ALLOWED robots.txt`);
+    res.status(200).send(fallbackRobots);
     
   } catch (error) {
     console.error('Error generating robots.txt:', error);
     
-    const timestamp = new Date().toISOString();
-    const emergencyRobots = `# Generated: ${timestamp}
-# Status: EMERGENCY FALLBACK
-User-agent: *
+    const emergencyRobots = `User-agent: *
 Disallow: /
 
 Sitemap: ${process.env.NEXT_PUBLIC_SITE_URL}/sitemap.xml`;
 
-    res.setHeader('Content-Type', 'text/plain');
+    // No cache for emergency content
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-    return res.status(200).send(emergencyRobots);
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('ETag', `"emergency-${Date.now()}"`);
+    
+    console.log(`[${new Date().toISOString()}] Serving EMERGENCY robots.txt`);
+    res.status(200).send(emergencyRobots);
   }
 }
