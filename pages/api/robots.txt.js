@@ -91,10 +91,9 @@ export default async function handler(req, res) {
         console.log(`[${new Date().toISOString()}] Reason - isPublic:`, isPublic, 'hasDisallowAll:', hasDisallowAll, 'hasNoIndex:', hasNoIndex);
         
         if (shouldDiscourageIndexing) {
+          // Remove sitemap when discouraging indexing
           const discouragingRobots = `User-agent: *
-Disallow: /
-
-Sitemap: ${siteUrl}/sitemap.xml`;
+Disallow: /`;
           
           // Set aggressive no-cache headers
           res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -105,7 +104,7 @@ Sitemap: ${siteUrl}/sitemap.xml`;
           res.setHeader('ETag', `"blocked-${Date.now()}"`);
           res.setHeader('Vary', 'User-Agent, Accept-Encoding');
           
-          console.log(`[${new Date().toISOString()}] Serving BLOCKED robots.txt`);
+          console.log(`[${new Date().toISOString()}] Serving BLOCKED robots.txt (no sitemap)`);
           return res.status(200).send(discouragingRobots);
         }
         
@@ -139,10 +138,9 @@ Sitemap: ${siteUrl}/sitemap.xml`;
     const shouldDiscourageFallback = !forceAllowIndexing && !isPublic;
     
     if (shouldDiscourageFallback) {
+      // Remove sitemap when discouraging indexing in fallback too
       const discouragingRobots = `User-agent: *
-Disallow: /
-
-Sitemap: ${siteUrl}/sitemap.xml`;
+Disallow: /`;
       
       // Aggressive no-cache for blocked content
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -152,7 +150,7 @@ Sitemap: ${siteUrl}/sitemap.xml`;
       res.setHeader('Last-Modified', new Date().toUTCString());
       res.setHeader('ETag', `"fallback-blocked-${Date.now()}"`);
       
-      console.log(`[${new Date().toISOString()}] Serving FALLBACK BLOCKED robots.txt`);
+      console.log(`[${new Date().toISOString()}] Serving FALLBACK BLOCKED robots.txt (no sitemap)`);
       return res.status(200).send(discouragingRobots);
     }
 
@@ -190,10 +188,9 @@ Sitemap: ${siteUrl}/sitemap.xml`;
   } catch (error) {
     console.error('Error generating robots.txt:', error);
     
+    // Remove sitemap from emergency robots.txt too
     const emergencyRobots = `User-agent: *
-Disallow: /
-
-Sitemap: ${process.env.NEXT_PUBLIC_SITE_URL}/sitemap.xml`;
+Disallow: /`;
 
     // No cache for emergency content
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -202,7 +199,7 @@ Sitemap: ${process.env.NEXT_PUBLIC_SITE_URL}/sitemap.xml`;
     res.setHeader('Expires', '0');
     res.setHeader('ETag', `"emergency-${Date.now()}"`);
     
-    console.log(`[${new Date().toISOString()}] Serving EMERGENCY robots.txt`);
+    console.log(`[${new Date().toISOString()}] Serving EMERGENCY robots.txt (no sitemap)`);
     res.status(200).send(emergencyRobots);
   }
 }
