@@ -1,13 +1,44 @@
-import Head from "next/head";
+import { gql } from "@apollo/client";
 import Link from "next/link";
+import SeoHead from "../components/SeoHead";
 import Header from "../components/Header";
 import EntryHeader from "../components/EntryHeader";
 import Footer from "../components/Footer";
 import style from "../styles/front-page.module.css";
 import { SITE_DATA_QUERY } from "../queries/SiteSettingsQuery";
 import { HEADER_MENU_QUERY } from "../queries/MenuQueries";
-import { useQuery } from "@apollo/client";
+import { useFaustQuery } from "@faustwp/core";
 import { getNextStaticProps } from "@faustwp/core";
+
+// Query for front page specific content
+const FRONT_PAGE_QUERY = gql`
+  query GetFrontPage($uri: String!) {
+    nodeByUri(uri: $uri) {
+      ... on Page {
+        title
+        content
+        seo {
+          title
+          description
+          canonicalUrl
+          robots
+          openGraph {
+            title
+            description
+            url
+            type
+            image {
+              url
+            }
+          }
+          jsonLd {
+            raw
+          }
+        }
+      }
+    }
+  }
+`;
 
 export default function FrontPage(props) {
   // Loading state for previews
@@ -15,21 +46,26 @@ export default function FrontPage(props) {
     return <>Loading...</>;
   }
 
+  // Use useFaustQuery for all data queries
+  const frontPageQuery = useFaustQuery(FRONT_PAGE_QUERY) || {};
+  const siteDataQuery = useFaustQuery(SITE_DATA_QUERY) || {};
+  const headerMenuDataQuery = useFaustQuery(HEADER_MENU_QUERY) || {};
 
-  const siteDataQuery = useQuery(SITE_DATA_QUERY) || {};
-  const headerMenuDataQuery = useQuery(HEADER_MENU_QUERY) || {};
-
-  const siteData = siteDataQuery?.data?.generalSettings || {};
-  const menuItems = headerMenuDataQuery?.data?.primaryMenuItems?.nodes || {
-    nodes: [],
-  };
+  // Access data directly (no .data property needed with useFaustQuery)
+  const siteData = siteDataQuery?.generalSettings || {};
+  const menuItems = headerMenuDataQuery?.primaryMenuItems?.nodes || [];
   const { title: siteTitle, description: siteDescription } = siteData;
+  
+  // Get front page specific data if available
+  const { title: pageTitle, content: pageContent, seo } = frontPageQuery?.nodeByUri || {};
 
   return (
     <>
-      <Head>
-        <title>{siteTitle}</title>
-      </Head>
+      <SeoHead
+        seo={seo}
+        fallbackTitle={siteTitle || "Welcome to Faust.js"}
+        fallbackDescription={siteDescription || "A headless WordPress site built with Faust.js"}
+      />
 
       <Header
         siteTitle={siteTitle}
@@ -38,7 +74,12 @@ export default function FrontPage(props) {
       />
 
       <main className="container">
-        <EntryHeader title="Welcome to the Faust Scaffold Blueprint" />
+        <EntryHeader title={pageTitle || "Welcome to the Faust Scaffold Blueprint"} />
+
+        {/* If there's custom content from WordPress, display it */}
+        {pageContent && (
+          <section dangerouslySetInnerHTML={{ __html: pageContent }} />
+        )}
 
         <section className={style.cardGrid}>
           <Link
@@ -258,6 +299,12 @@ export async function getStaticProps(context) {
 }
 
 FrontPage.queries = [
+  {
+    query: FRONT_PAGE_QUERY,
+    variables: ({ uri }) => ({
+      uri: uri || "/",
+    }),
+  },
   {
     query: SITE_DATA_QUERY,
   },

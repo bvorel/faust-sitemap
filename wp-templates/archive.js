@@ -1,5 +1,5 @@
-import { gql, useQuery } from "@apollo/client";
-import Head from "next/head";
+import { gql } from "@apollo/client";
+import SeoHead from "../components/SeoHead";
 import Header from "../components/Header";
 import EntryHeader from "../components/EntryHeader";
 import Footer from "../components/Footer";
@@ -7,8 +7,9 @@ import { SITE_DATA_QUERY } from "../queries/SiteSettingsQuery";
 import { HEADER_MENU_QUERY } from "../queries/MenuQueries";
 import { POST_LIST_FRAGMENT } from "../fragments/PostListFragment";
 import PostListItem from "../components/PostListItem";
-import { getNextStaticProps } from "@faustwp/core";
+import { getNextStaticProps, useFaustQuery } from "@faustwp/core";
 import { useState } from "react";
+import { useQuery } from "@apollo/client";
 import styles from "../styles/archive.module.css";
 
 // Change to how many posts you want to load at once
@@ -21,6 +22,25 @@ const ARCHIVE_QUERY = gql`
       archiveType: __typename
       ... on Category {
         name
+        description
+        seo {
+          title
+          description
+          canonicalUrl
+          robots
+          openGraph {
+            title
+            description
+            url
+            type
+            image {
+              url
+            }
+          }
+          jsonLd {
+            raw
+          }
+        }
         posts(first: $first, after: $after) {
           pageInfo {
             hasNextPage
@@ -33,6 +53,25 @@ const ARCHIVE_QUERY = gql`
       }
       ... on Tag {
         name
+        description
+        seo {
+          title
+          description
+          canonicalUrl
+          robots
+          openGraph {
+            title
+            description
+            url
+            type
+            image {
+              url
+            }
+          }
+          jsonLd {
+            raw
+          }
+        }
         posts(first: $first, after: $after) {
           pageInfo {
             hasNextPage
@@ -60,8 +99,9 @@ export default function ArchivePage(props) {
     fetchPolicy: "cache-and-network",
   });
 
-  const siteDataQuery = useQuery(SITE_DATA_QUERY) || {};
-  const headerMenuDataQuery = useQuery(HEADER_MENU_QUERY) || {};
+  // Use useFaustQuery for site data and menu data
+  const siteDataQuery = useFaustQuery(SITE_DATA_QUERY) || {};
+  const headerMenuDataQuery = useFaustQuery(HEADER_MENU_QUERY) || {};
 
   if (loading && !data)
     return (
@@ -74,12 +114,11 @@ export default function ArchivePage(props) {
     return <p>No posts have been published</p>;
   }
 
-  const siteData = siteDataQuery?.data?.generalSettings || {};
-  const menuItems = headerMenuDataQuery?.data?.primaryMenuItems?.nodes || {
-    nodes: [],
-  };
+  // Access data directly (no .data property needed with useFaustQuery)
+  const siteData = siteDataQuery?.generalSettings || {};
+  const menuItems = headerMenuDataQuery?.primaryMenuItems?.nodes || [];
   const { title: siteTitle, description: siteDescription } = siteData;
-  const { archiveType, name, posts } = data?.nodeByUri || {};
+  const { archiveType, name, description, seo, posts } = data?.nodeByUri || {};
 
   const loadMorePosts = async () => {
     await fetchMore({
@@ -107,11 +146,18 @@ export default function ArchivePage(props) {
     });
   };
 
+  // Generate fallback SEO data
+  const archiveTitle = `${archiveType}: ${name}`;
+  const fallbackTitle = `${archiveTitle} - ${siteTitle}`;
+  const fallbackDescription = description || `Browse all posts in ${name} ${archiveType.toLowerCase()}`;
+
   return (
     <>
-      <Head>
-        <title>{`${archiveType}: ${name} - ${siteTitle}`}</title>
-      </Head>
+      <SeoHead
+        seo={seo}
+        fallbackTitle={fallbackTitle}
+        fallbackDescription={fallbackDescription}
+      />
 
       <Header
         siteTitle={siteTitle}
